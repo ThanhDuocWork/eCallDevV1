@@ -1,0 +1,27 @@
+1. cd ../JsonC
+
+// Add file libjson-c.so into /usr/lib of sys
+2. sudo cp Libs/Src/libjson-c.so /usr/lib
+
+// Add file libjson-c.so.5 into /usr/lib of sys
+3. sudo cp Libs/Src/libjson-c.so.5 /usr/lib
+
+// build src JsonParser.cpp into JsonParser.o with path file ../JsonC
+4. g++ -c -fpic Src/JsonParser.cpp
+
+// build file JsonParser.o into shared library libJsonParser.so and link file json-c
+5. g++ -shared -o Libs/libJsonParser.so JsonParser.o -ljson-c
+
+// Add file libJsonParser.so into /usr/lib of sys
+6. sudo cp Libs/libJsonParser.so /usr/lib
+
+// build TestParserJson.cpp
+7. g++ Example/TestParserJson.cpp -o Example/main -lJsonParser
+8. cd Example
+9. ./main
+
+************************************************************************************
+// build Makefile
+1. make
+2. cd Example
+3. ./main
