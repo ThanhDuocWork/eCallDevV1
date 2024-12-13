@@ -25,6 +25,7 @@ private:
     bool flagPause;   
     bool isPlaying;   
  
+    std::thread playThread;
     std::condition_variable cv;
     std::mutex mtx;
     static std::shared_ptr<AudioAdapter> mInstanceAudio;
@@ -42,6 +43,8 @@ public:
     void resumeAudio();
     void stopAudio();
     static AudioAdapter *getInstance();
+    void runFileWAV(const std::string &filename);
+    void handleLogicRunAudio(const std::string &data);
 };
  
 #endif // AUDIOADAPTER_H

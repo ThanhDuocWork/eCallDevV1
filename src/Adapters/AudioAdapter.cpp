@@ -8,11 +8,15 @@ AudioAdapter::AudioAdapter()
        {}
  
 AudioAdapter::~AudioAdapter() {
+    stopAudio();
     if (pcmHandle) snd_pcm_close(pcmHandle);
     if (fileRB) fclose(fileRB);
 }
  
 bool AudioAdapter::openFile(const std::string filename) {
+    if (fileRB) {
+        fclose(fileRB);  
+    }
     fileRB = fopen(filename.c_str(), "rb");
     if (!fileRB) {
         std::cerr << "Failed to open file: " << filename << std::endl;
@@ -20,6 +24,7 @@ bool AudioAdapter::openFile(const std::string filename) {
     }
     return true;
 }
+
  
 bool AudioAdapter::configureDevice() {
     if (snd_pcm_open(&pcmHandle, "default", SND_PCM_STREAM_PLAYBACK, 0) < 0) {
@@ -63,7 +68,7 @@ void AudioAdapter::playAudio() {
         int frames = fread(buffer, sizeof(unsigned char), bufferSize, fileRB);
         if (frames <= 0) {
             if (feof(fileRB)) {
-                std::cout << "End of file reached." << std::endl;
+                printLog_I("End of file reached.");
                 break;
             }
         }
@@ -80,14 +85,14 @@ void AudioAdapter::playAudio() {
  
     snd_pcm_drain(pcmHandle);
     isPlaying = false;
-    std::cout << "Playback finished or stopped." << std::endl;
+    printLog_I("Playback finished or stopped.");
 }
  
  
 void AudioAdapter::pauseAudio() {
     std::lock_guard<std::mutex> lock(mtx);
     if (!isPlaying || flagPause) {
-        std::cout << "Cannot pause, playback is not active or already paused." << std::endl;
+        printLog_I("Cannot pause, playback is not active or already paused.");
         return;
     }
  
@@ -97,12 +102,12 @@ void AudioAdapter::pauseAudio() {
             std::cerr << "snd_pcm_pause not supported, stopping playback manually." << std::endl;
             snd_pcm_drop(pcmHandle);  
         } else {
-            std::cout << "Playback paused via snd_pcm_pause." << std::endl;
+            printLog_I( "Playback paused via snd_pcm_pause.");
         }
     }
  
     flagPause = true;
-    std::cout << "Playback paused." << std::endl;
+    printLog_I("Playback paused.");
 }
  
  
@@ -110,7 +115,7 @@ void AudioAdapter::resumeAudio() {
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (!flagPause) {
-            std::cout << "Cannot resume, playback is not paused." << std::endl;
+            printLog_I("Cannot resume, playback is not paused.");
             return;
         }
  
@@ -120,7 +125,7 @@ void AudioAdapter::resumeAudio() {
                 std::cerr << "snd_pcm_pause not supported, restarting playback manually." << std::endl;
                 snd_pcm_prepare(pcmHandle);  
             } else {
-                std::cout << "Playback resumed via snd_pcm_pause." << std::endl;
+                printLog_I("Playback resumed via snd_pcm_pause.");
             }
         }
  
@@ -139,7 +144,10 @@ void AudioAdapter::stopAudio() {
     if (pcmHandle) {
         snd_pcm_drop(pcmHandle);
     }
-    std::cout << "Playback stopped." << std::endl;
+    if (playThread.joinable()) {
+        playThread.join();
+    }
+    printLog_I("Playback stopped.");
 }
 
 AudioAdapter *AudioAdapter::getInstance()
@@ -149,4 +157,41 @@ AudioAdapter *AudioAdapter::getInstance()
         mInstanceAudio = std::make_shared<AudioAdapter>();
     }
     return mInstanceAudio.get();
+}
+
+void AudioAdapter::runFileWAV(const std::string &filename) {
+    if (!openFile(filename)) {
+        std::cerr << "Failed to open WAV file: " << filename << std::endl;
+        return;
+    }
+    if (!configureDevice()) {
+        std::cerr << "Failed to configure ALSA device." << std::endl;
+        return;
+    }
+    if (playThread.joinable()) {
+        stopAudio();
+        playThread.join();  
+    }
+    //playThread = std::thread(&AudioAdapter::playAudio, this);
+    std::thread([this]() { playAudio(); }).detach();
+}
+
+
+void AudioAdapter::handleLogicRunAudio(const std::string &data)
+{
+    if (data == "ON") {
+        printLog_I("Audio ON command received.");
+        runFileWAV("/home/duoctdt/Example_Project/src/piano.wav");
+    } else if (data == "OFF") {
+        printLog_I("Audio OFF command received.");
+        stopAudio(); 
+    } else if (data == "PAUSE") {
+        printLog_I("Audio PAUSE command received.");
+        pauseAudio();
+    } else if (data == "RESUME") {
+        printLog_I("Audio RESUME command received.");
+        resumeAudio();
+    } else {
+        printLog_I("Error: Invalid audio command received.");
+    }
 }

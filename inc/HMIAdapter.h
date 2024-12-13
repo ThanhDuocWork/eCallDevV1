@@ -9,7 +9,8 @@
 #include "Logger.h"
 #include<thread>
 #include<chrono>
-
+#include "MQTTAdapter.h"
+#include"AudioAdapter.h"
 #define SOCKET_PORT 65432
 
 using json = nlohmann::json;

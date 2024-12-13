@@ -11,12 +11,18 @@ void handle()
         HMIAdapter::getInstance()->initSocket();
         HMIAdapter::getInstance()->runServerSocketHMI();
     }
+    else 
+    {
+        printLog_I("input valid!!");
+    }
 }
 int main(){ 
+    
     while (true)
     {
-       printLog_I("Press:"); 
-       handle();
+        printLog_I("Press:"); 
+        handle();
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     return 0;

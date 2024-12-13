@@ -7,12 +7,20 @@ void HMIAdapter::handleReceivedCommand(int client_socket) {
 
     if (valread > 0) {
         std::string command(buffer);
-        std::cout << "Receive command from client: " << command << std::endl;
+        printLog_I("Receive command from client: %s",command.c_str());
+
+        json command_json = json::parse(command);
+        MQTTAdapter::getInstance()->sendMessage(&command_json);
+
+        if (command_json.contains("command")) {
+            std::string audioCommand = command_json["command"];
+            AudioAdapter::getInstance()->handleLogicRunAudio(audioCommand);
+        }
 
         json response = stringCommand(command);
         onHMIScreen(client_socket, response);
     } else if (valread == 0) {
-        std::cout << "Client closed connection. Please reconnect!" << std::endl;
+        printLog_I("Client closed connection. Please reconnect!");
     } else {
         perror("Error receiving data from client");
     }
@@ -42,7 +50,7 @@ void HMIAdapter::onHMIScreen(int client_socket, const json& response) {
     if (bytes_sent == -1) {
         perror("Send response failed!!");
     } else {
-        std::cout << "Send response to client: " << jsonResponse << std::endl;
+        printLog_I("Send response to client: %s",jsonResponse.c_str());
     }
 }
 
