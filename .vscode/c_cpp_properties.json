@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/duoctdt/vcpkg/installed/x64-linux/include",
+                "/home/duoctdt/vcpkg/installed/x64-linux/include/nlohmann",
+                "${workspaceFolder}/Utils/Logger/inc"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

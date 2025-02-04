@@ -1,156 +1,224 @@
 #include "MQTTAdapter.h"
 std::shared_ptr<MQTTAdapter> MQTTAdapter::mInstanceMQTT = nullptr;
-MQTTAdapter::MQTTAdapter() {
-    mosquitto_lib_init();
+bool MQTTAdapter::running;
+MQTTAdapter::MQTTAdapter ()
+{
+    mosquitto_lib_init ();
 }
 
-MQTTAdapter::~MQTTAdapter() {
-    mosquitto_lib_cleanup();
-}
-void MQTTAdapter::sendMessage(const json *Message)
+MQTTAdapter::~MQTTAdapter ()
 {
-   MQTTAdapter::PubMQTT(*Message);
+    mosquitto_lib_cleanup ();
 }
-void MQTTAdapter::PubMQTT(const json &command_json) {
+void MQTTAdapter::sendMessage (const std::string &message)
+{
+    MQTTAdapter::PubMQTT (message);
+}
+void MQTTAdapter::PubMQTT (const std::string &commandMessage)
+{
     const char *id = "publisher-client";
-    std::shared_ptr<struct mosquitto> mosq(
-        mosquitto_new(id, true, NULL),
-        mosquitto_destroy 
-    );
-    if (!mosq) {
+    std::shared_ptr<struct mosquitto> mosq (mosquitto_new (id, true, NULL), mosquitto_destroy);
+    if (!mosq)
+    {
         std::cerr << "Failed to create Mosquitto client." << std::endl;
         return;
     }
 
-    const char *host = "localhost";
-    u_int32_t port = 1883;
+    const char *host   = "192.168.137.180";
+    u_int32_t port     = 1883;
     u_int32_t timeLive = 60;
 
-    if (mosquitto_connect(mosq.get(), host, port, timeLive) != MOSQ_ERR_SUCCESS) {
+    if (mosquitto_connect (mosq.get (), host, port, timeLive) != MOSQ_ERR_SUCCESS)
+    {
         std::cerr << "Failed to connect to broker." << std::endl;
         return;
     }
 
-    //const char *message = "Hello from Publisher!";
-    std::string message = command_json.dump();
-    const char *toppic = "ecall/topic";
+    const char *topic     = "ecall/response";
+    std::string flagTopic = topic;
+    std::string commandPayload;
+    if (commandMessage == "ON")
+    {
+        nlohmann::json jsonMessage = { { "vin_id", "FPT53516551000141999" }, { "ip", "192.168.2.1" }, { "latitude", 10.011280 }, { "longitude", 105.730525 } };
+        commandPayload             = jsonMessage.dump ();
+    }
+    else if (commandMessage == "OFF")
+    {
+        // commandPayload = R"({"status":"off"})";
+    }
+    else
+    {
+        std::cerr << "Invalid command message: " << commandMessage << std::endl;
+        return;
+    }
 
-    if (mosquitto_publish(mosq.get(), NULL, toppic, message.size(), message.c_str(), 1, true) != MOSQ_ERR_SUCCESS) {
+    if (mosquitto_publish (mosq.get (), NULL, topic, commandPayload.size (), commandPayload.c_str (), 1, true) != MOSQ_ERR_SUCCESS)
+    {
         std::cerr << "Failed to publish message." << std::endl;
         return;
     }
 
-    printLog_I("Message published to topic 'example/topic'." );
+    printLog_I ("Message published to topic: %s", flagTopic.c_str ());
+    printLog_I ("Message: %s", commandPayload.c_str ());
 }
 
-void MQTTAdapter::SubMQTT() {
+void MQTTAdapter::SubMQTT ()
+{
     const char *id = "subscriber-client";
-    struct mosquitto *mosq = mosquitto_new(id, true, this);
-    if (!mosq) {
+    mMosq          = std::shared_ptr<struct mosquitto> (mosquitto_new (id, true, this), mosquitto_destroy);
+    if (!mMosq)
+    {
         std::cerr << "Failed to create Mosquitto client." << std::endl;
         return;
     }
 
-    mosquitto_message_callback_set(mosq, MQTTAdapter::messageCallback);
-    mosquitto_disconnect_callback_set(mosq, MQTTAdapter::onDisconnectCallback);  
-    
-    const char *host = "localhost";
-    u_int32_t port = 1883;
-    u_int32_t timeLive = 60;  
-
-    if (mosquitto_connect(mosq, host, port, timeLive) != MOSQ_ERR_SUCCESS) {
-        std::cerr << "Failed to connect to broker." << std::endl;
-        mosquitto_destroy(mosq);
-        return;
-    }
-
-    const char *toppic = "example/topic";
-    if (mosquitto_subscribe(mosq, NULL, toppic, 0) != MOSQ_ERR_SUCCESS) {
-        std::cerr << "Failed to subscribe to topic." << std::endl;
-        mosquitto_destroy(mosq);
-        return;
-    }
-
-    printLog_I("Subscribed to topic 'example/topic'. Waiting for messages...");
-    
-    std::thread([mosq]() {
-        if (mosquitto_loop_forever(mosq, -1, 1) != MOSQ_ERR_SUCCESS) {
-            std::cerr << "Error in MQTT loop." << std::endl;
+    mosquitto_connect_callback_set (mMosq.get (),
+    [] (struct mosquitto *mosq, void *userdata, int result)
+    {
+        auto *adapter = static_cast<MQTTAdapter *> (userdata);
+        if (adapter)
+        {
+            adapter->connectToBroker (mosq, userdata, result);
         }
-        mosquitto_destroy(mosq);
-    }).detach();
+        else
+        {
+            std::cerr << "MQTTAdapter userdata is null in connect callback." << std::endl;
+        }
+    });
 
-}
-void MQTTAdapter::messageCallback(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message) {
-    MQTTAdapter *adapter = static_cast<MQTTAdapter *>(userdata);
-    if (!userdata || !message) {
-        std::cerr << "Invalid userdata or message in callback!" << std::endl;
+    mosquitto_message_callback_set (mMosq.get (),
+    [] (struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message)
+    {
+        auto *adapter = static_cast<MQTTAdapter *> (userdata);
+        if (adapter)
+        {
+            adapter->handleMessage (mosq, userdata, message);
+        }
+        else
+        {
+            std::cerr << "MQTTAdapter userdata is null in message callback." << std::endl;
+        }
+    });
+
+    const char *host = "192.168.137.180";
+    if (mosquitto_connect (mMosq.get (), host, 1883, 60) != MOSQ_ERR_SUCCESS)
+    {
+        std::cerr << "Failed to connect to broker: " << host << std::endl;
         return;
     }
-    if (adapter) {
-        adapter->handleMessage(mosq, userdata, message);
+
+    if (mosquitto_loop_start (mMosq.get ()) != MOSQ_ERR_SUCCESS)
+    {
+        std::cerr << "Failed to start Mosquitto loop." << std::endl;
+        return;
+    }
+
+    printLog_I ("Waiting for connection to complete...");
+}
+
+
+void MQTTAdapter::messageCallback (struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message)
+{
+}
+
+void MQTTAdapter::connectToBroker (struct mosquitto *mosq, void *userdata, int result)
+{
+    if (result == MOSQ_ERR_SUCCESS)
+    {
+        const char *topic     = "response/ecall";
+        std::string flagTopic = topic;
+        mosquitto_subscribe (mosq, NULL, topic, 0);
+        printLog_I ("Connected to broker. Subscribing to topic: %s", flagTopic.c_str ());
+    }
+    else
+    {
+        std::cerr << "Failed to connect to broker. Reason: " << result << std::endl;
     }
 }
-void MQTTAdapter::onDisconnectCallback(struct mosquitto *mosq, void *userdata, int rc) {
-    MQTTAdapter *adapter = static_cast<MQTTAdapter *>(userdata);
-    if (adapter) {
-        std::cerr << "Disconnected from broker! Reason code: " << rc << std::endl;
-    }
+void MQTTAdapter::disconnectToBroker (struct mosquitto *mosq, void *userdata, int rc)
+{
+    printLog_I ("Disconnected from broker. Reason: ", rc);
 }
-void MQTTAdapter::handleMessage(struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message) {
-    try {
+void MQTTAdapter::handleSignal (int signal)
+{
+    MQTTAdapter::running = false;
+}
+void MQTTAdapter::handleMessage (struct mosquitto *mosq, void *userdata, const struct mosquitto_message *message)
+{
+    try
+    {
         std::string topic = message->topic;
-        std::string payload = std::string((char *)message->payload, message->payloadlen);
+        std::string payload ((char *)message->payload, message->payloadlen);
 
-        printLog_I("Received message on topic: %s payload: %s", topic.c_str(), payload.c_str());
+        printLog_I ("Received MQTT message on topic: %s, payload: %s", topic.c_str (), payload.c_str ());
+        if (mOnMessageCallback)
+        {
+            std::lock_guard<std::mutex> lock (mCallbackMutex);
+            mOnMessageCallback (topic, payload);
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Error processing message: " << e.what () << std::endl;
+    }
+}
 
-        // Khởi tạo cURL
-        CURL *curl = curl_easy_init();
-        if (curl) {
-            const char *url = "http://localhost:3000/api/endpoint";
-            curl_easy_setopt(curl, CURLOPT_URL, url);
 
-            // Đảm bảo JSON payload đúng định dạng
-            json json_payload = {
-                {"topic", topic},
-                {"message", json::parse(payload)} // Parse payload thành JSON nếu cần
-            };
-            std::string json_str = json_payload.dump();
+const std::string MQTTAdapter::getResponseFromSub ()
+{
+    return mMessageResponse;
+}
+MQTTAdapter *MQTTAdapter::getInstance ()
+{
+    if (mInstanceMQTT == nullptr)
+    {
+        mInstanceMQTT = std::make_shared<MQTTAdapter> ();
+    }
+    return mInstanceMQTT.get ();
+}
 
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_str.c_str());
+void MQTTAdapter::handleEventSub ()
+{
+    printLog_I ("State at MQTTSUB!!");
 
-            struct curl_slist *headers = NULL;
-            headers = curl_slist_append(headers, "Content-Type: application/json");
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    auto mqttAdapter = MQTTAdapter::getInstance ();
+    mqttAdapter->SubMQTT ();
+    mqttAdapter->setOnMessageCallback (
+    [this] (const std::string &topic, const std::string &payload)
+    {
+        printLog_I ("Callback: Received message on topic: %s, payload: %s", topic.c_str (), payload.c_str ());
+        if (topic == "response/ecall")
+        {
+            nlohmann::json parsedPayload = nlohmann::json::parse (payload);
+            if (parsedPayload.contains ("response"))
+            {
+                std::string response = parsedPayload["response"];
+                mMessageResponse     = response;
 
-            CURLcode res = curl_easy_perform(curl);
-            if (res != CURLE_OK) {
-                std::cerr << "cURL error: " << curl_easy_strerror(res) << std::endl;
-            } else {
-                long response_code;
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-                if (response_code == 200) {
-                    printLog_I("Data sent to server successfully!");
-                } else {
-                    std::cerr << "Failed to send data. HTTP Response Code: " << response_code << std::endl;
+                size_t findStatus = response.find ("confirmed");
+                if (findStatus != std::string::npos)
+                {
+                    std::string getStatus = response.substr (findStatus);
+                    printLog_I ("Get Status: %s", getStatus.c_str ());
+                    HMIAdapter::getInstance ()->handleDataFromMQTT (getStatus);
                 }
             }
-
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
+            else
+            {
+                printLog_E ("Invalid payload: Missing 'response' field.");
+            }
         }
-    } catch (const std::exception &e) {
-        std::cerr << "Exception in handleMessage: " << e.what() << std::endl;
-    }
+        else
+        {
+            printLog_E ("Unhandled topic: %s", topic.c_str ());
+        }
+    });
+
+    printLog_I ("MQTT subscription set and callback registered.");
 }
 
 
-
-MQTTAdapter *MQTTAdapter::getInstance()
+void MQTTAdapter::setOnMessageCallback (const std::function<void (const std::string &topic, const std::string &payload)> &callback)
 {
-    if(mInstanceMQTT==nullptr)
-    {
-        mInstanceMQTT = std::make_shared<MQTTAdapter>();
-    }
-    return mInstanceMQTT.get();
+    mOnMessageCallback = callback;
 }

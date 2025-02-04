@@ -1,0 +1,14 @@
+/home/duoctdt/CrossEXProject/build/CMakeFiles/install/strip.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/edit_cache.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/project.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/rebuild_cache.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/list_install_components.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/install/local.dir
+/home/duoctdt/CrossEXProject/build/CMakeFiles/install.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/install/strip.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/edit_cache.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/Utils.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/rebuild_cache.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/list_install_components.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/install/local.dir
+/home/duoctdt/CrossEXProject/build/Utils/CMakeFiles/install.dir

@@ -5,6 +5,9 @@ set(
     SOURCES
     Logger/src/Logger.cpp
     FeatureTimer/src/FeatureTimer.cpp
+    SimulateButton/src/SimulateButton.cpp
+    ManagerMessage/src/ManagerMessage.cpp
+    EventData/src/EventData.cpp
 )
 #!!
 add_definitions(-D_STD_LOG_)
@@ -16,6 +19,10 @@ target_include_directories(
     Utils PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/Logger/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/FeatureTimer/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/NlohmannJSON/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/SimulateButton/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/ManagerMessage/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/EventData/inc
 )
 
 
